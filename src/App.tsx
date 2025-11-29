@@ -2,11 +2,11 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { RefreshCw, Loader2, Award, X, Eye, Shuffle } from 'lucide-react';
 
 // URL API default (sesuaikan dengan konfigurasi Flask/Proxy Anda)
-// Logic: Jika bukan localhost, gunakan VITE_APP_API_URL dari environment variable
+// PERBAIKAN: API_BASE_URL diatur ke '' (string kosong) saat deployment
 const API_BASE_URL = 
     (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'))
     ? 'http://localhost:5000' 
-    : import.meta.env.VITE_APP_API_URL || ''; // Gunakan ENV variable di deployment
+    : ''; // Memicu Vercel Proxy/Rewrite
 
 const TOTAL_ROUNDS = 10; // Total putaran disesuaikan menjadi 10
 
@@ -104,7 +104,7 @@ const SETS_11_20 = FIXED_DECKS.slice(10, 20).map(deck => deck.slice()); // Sets 
 
 // Helper function to handle API calls with error parsing
 const apiFetch = async (endpoint: string, method: string = 'GET', body: unknown = null): Promise<GameState> => {
-    // Memastikan URL API Base digunakan, terutama saat deployment
+    // KETIKA API_BASE_URL KOSONG, INI AKAN MENJADI RELATIF (Cth: /start_ai_test)
     const url = API_BASE_URL.endsWith('/') ? `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}` : `${API_BASE_URL}${endpoint}`;
 
     const response = await fetch(url, {
@@ -139,7 +139,7 @@ const AITournamentHarness: React.FC = () => {
     const [showAllDecks, setShowAllDecks] = useState<boolean>(false); 
     // State untuk menentukan apakah dek telah ditukar dari konfigurasi default
     const [isDeckSwapped, setIsDeckSwapped] = useState<boolean>(false); 
-
+    
     // Toggle function for the card viewer
     const toggleAllDecks = () => setShowAllDecks(prev => !prev);
     
