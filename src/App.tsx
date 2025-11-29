@@ -78,7 +78,7 @@ const FIXED_DECKS: number[][] = [
     // Set 12
     [1, 6, 3, 4, 6, 4, 7, 7, 9, 3, 5, 5, 8, 2, 2, 1, 9, 8],
     // Set 13
-    [9, 8, 9, 3, 4, 6, 6, 7, 3, 1, 1, 2, 5, 2, 4, 8, 5, 7],
+    [9, 8, 9, 3, 4, 6, 6, 7, 3, 1, 1, 2, 5, 2, 4, 1, 8, 5, 7],
     // Set 14
     [2, 6, 5, 9, 1, 6, 3, 7, 7, 2, 9, 1, 8, 8, 4, 3, 5, 4],
     // Set 15
@@ -135,7 +135,8 @@ const AITournamentHarness: React.FC = () => {
     const [showAllDecks, setShowAllDecks] = useState<boolean>(false); 
     // State untuk menentukan apakah dek telah ditukar dari konfigurasi default
     const [isDeckSwapped, setIsDeckSwapped] = useState<boolean>(false); 
-
+    
+   
     // Toggle function for the card viewer
     const toggleAllDecks = () => setShowAllDecks(prev => !prev);
     
