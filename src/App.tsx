@@ -2,11 +2,11 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { RefreshCw, Loader2, Award, X, Eye, Shuffle } from 'lucide-react';
 
 // URL API default (sesuaikan dengan konfigurasi Flask/Proxy Anda)
-// PERBAIKAN: API_BASE_URL diatur ke '' (string kosong) saat deployment
+// Logic: Jika bukan localhost, URL akan menjadi string kosong ('') untuk memicu Vercel Rewrite
 const API_BASE_URL = 
     (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'))
     ? 'http://localhost:5000' 
-    : ''; // Memicu Vercel Proxy/Rewrite
+    : ''; // Di deployment, ini akan menjadi dasar path relatif
 
 const TOTAL_ROUNDS = 10; // Total putaran disesuaikan menjadi 10
 
@@ -104,8 +104,18 @@ const SETS_11_20 = FIXED_DECKS.slice(10, 20).map(deck => deck.slice()); // Sets 
 
 // Helper function to handle API calls with error parsing
 const apiFetch = async (endpoint: string, method: string = 'GET', body: unknown = null): Promise<GameState> => {
-    // KETIKA API_BASE_URL KOSONG, INI AKAN MENJADI RELATIF (Cth: /start_ai_test)
-    const url = API_BASE_URL.endsWith('/') ? `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}` : `${API_BASE_URL}${endpoint}`;
+    
+    // Perbaiki konstruksi URL untuk memastikan jalur relatif saat deployed
+    let url: string;
+    const finalEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
+    if (API_BASE_URL === 'http://localhost:5000') {
+        // Localhost: Gunakan URL absolut
+        url = `${API_BASE_URL}${finalEndpoint}`;
+    } else {
+        // Deployed: Gunakan jalur relatif untuk memicu vercel.json rewrite/proxy
+        url = finalEndpoint;
+    }
 
     const response = await fetch(url, {
         method,
@@ -139,7 +149,7 @@ const AITournamentHarness: React.FC = () => {
     const [showAllDecks, setShowAllDecks] = useState<boolean>(false); 
     // State untuk menentukan apakah dek telah ditukar dari konfigurasi default
     const [isDeckSwapped, setIsDeckSwapped] = useState<boolean>(false); 
-    
+
     // Toggle function for the card viewer
     const toggleAllDecks = () => setShowAllDecks(prev => !prev);
     
