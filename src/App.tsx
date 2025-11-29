@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { RefreshCw, Play, Loader2, Award, ChevronsRight, X } from 'lucide-react';
+import { RefreshCw, Loader2, Award, X, Eye, Shuffle } from 'lucide-react';
 
 // URL API default (sesuaikan dengan konfigurasi Flask/Proxy Anda)
 const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:5000' : '';
-const TOTAL_ROUNDS = 24; // Total putaran: 12 vs Jelek + 12 vs Normal
+const TOTAL_ROUNDS = 10; // Total putaran disesuaikan menjadi 10
 
 // --- TYPESCRIPT INTERFACES ---
 
@@ -43,46 +43,60 @@ interface RoundResult {
 // Warna Pemain (0=Merah, 1=Hijau, 2=Biru, 3=Kuning)
 const PLAYER_COLORS: string[] = ['#dc2626', '#10b981', '#3b82f6', '#fcd34d'];
 
-// --- DECK UTILITIES ---
+// --- FIXED DECKS BERDASARKAN GAMBAR (Total 20 Set) ---
+// DIPASTIKAN SEMUA MEMILIKI 18 ELEMEN
+const FIXED_DECKS: number[][] = [
+    // Set 1
+    [6, 1, 3, 8, 4, 2, 7, 6, 9, 2, 3, 4, 9, 5, 1, 5, 8, 7], 
+    // Set 2
+    [5, 1, 3, 7, 6, 8, 2, 3, 4, 8, 5, 9, 7, 9, 6, 1, 2, 4], 
+    // Set 3
+    [6, 2, 5, 6, 5, 4, 1, 3, 3, 2, 8, 7, 8, 9, 1, 4, 9, 7],
+    // Set 4
+    [3, 7, 6, 4, 5, 7, 2, 6, 5, 4, 8, 1, 1, 9, 2, 9, 3, 8],
+    // Set 5
+    [9, 6, 1, 3, 6, 4, 4, 8, 9, 5, 2, 3, 7, 1, 8, 7, 5, 2],
+    // Set 6
+    [9, 2, 6, 1, 6, 3, 8, 7, 4, 2, 8, 9, 5, 3, 7, 5, 4, 1],
+    // Set 7
+    [3, 7, 4, 5, 7, 6, 9, 3, 9, 5, 6, 2, 8, 2, 4, 1, 8, 1],
+    // Set 8
+    [3, 7, 1, 5, 6, 1, 4, 2, 5, 9, 4, 8, 3, 8, 9, 2, 7, 6],
+    // Set 9
+    [5, 6, 3, 8, 8, 9, 1, 5, 7, 4, 1, 7, 3, 9, 2, 6, 4, 2],
+    // Set 10
+    [9, 5, 3, 2, 8, 6, 4, 3, 4, 2, 7, 1, 8, 1, 7, 9, 6, 5],
+    
+    // Set 11
+    [3, 1, 3, 2, 9, 6, 2, 8, 1, 7, 4, 8, 7, 4, 6, 5, 9, 5],
+    // Set 12
+    [1, 6, 3, 4, 6, 4, 7, 7, 9, 3, 5, 5, 8, 2, 2, 1, 9, 8],
+    // Set 13
+    [9, 8, 9, 3, 4, 6, 6, 7, 3, 1, 1, 2, 5, 2, 4, 1, 8, 5, 7],
+    // Set 14
+    [2, 6, 5, 9, 1, 6, 3, 7, 7, 2, 9, 1, 8, 8, 4, 3, 5, 4],
+    // Set 15
+    [3, 4, 8, 9, 4, 7, 7, 6, 2, 5, 1, 1, 3, 6, 2, 5, 8, 9],
+    // Set 16
+    [5, 1, 4, 9, 2, 9, 8, 6, 5, 8, 7, 3, 6, 1, 4, 7, 3, 2],
+    // Set 17
+    [2, 8, 2, 3, 4, 7, 1, 8, 3, 6, 6, 5, 1, 4, 5, 9, 7, 9],
+    // Set 18
+    [5, 9, 6, 7, 1, 3, 4, 4, 9, 5, 2, 8, 2, 3, 8, 1, 7, 6],
+    // Set 19
+    [9, 1, 9, 4, 5, 5, 2, 2, 3, 8, 8, 7, 4, 3, 7, 1, 6, 6],
+    // Set 20
+    [2, 4, 7, 1, 6, 2, 5, 3, 8, 3, 5, 7, 4, 8, 9, 1, 9, 6],
+];
 
-// Fungsi Fisher-Yates shuffle
-const shuffleArray = (array: number[]): number[] => {
-    const arr = [...array];
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-};
+// Pisahkan 20 set menjadi dua grup 10
+const SETS_1_10 = FIXED_DECKS.slice(0, 10).map(deck => deck.slice()); // Sets 1-10
+const SETS_11_20 = FIXED_DECKS.slice(10, 20).map(deck => deck.slice()); // Sets 11-20
 
-// Fungsi untuk membuat 18 kartu (2x 1-9), diacak normal
-const generateShuffledDeck = (): number[] => {
-    const deck = [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9];
-    return shuffleArray(deck);
-};
-
-// Fungsi untuk membuat 18 kartu "jelek-jelek" (nilai rendah dominan)
-const generateBadDeck = (): number[] => {
-    // 4x 1, 4x 2, 4x 3, 2x 4, 2x 5, 1x 6, 1x 7 (Total 18 kartu)
-    const baseDeck = [
-        1, 1, 1, 1, 
-        2, 2, 2, 2, 
-        3, 3, 3, 3, 
-        4, 4, 5, 5, 
-        6, 7 
-    ];
-    return shuffleArray(baseDeck);
-};
-
-// Generate 24 fixed decks for P0 (always standard/shuffled)
-const P0_DECKS = Array(TOTAL_ROUNDS).fill(0).map(() => generateShuffledDeck());
-// Generate 12 fixed bad decks for P1 (Rounds 1-12)
-const P1_BAD_DECKS = Array(TOTAL_ROUNDS / 2).fill(0).map(() => generateBadDeck());
-// Generate 12 fixed good decks for P1 (Rounds 13-24)
-const P1_GOOD_DECKS = Array(TOTAL_ROUNDS / 2).fill(0).map(() => generateShuffledDeck());
 
 // --- API UTILITIES ---
 
+// Helper function to handle API calls with error parsing
 const apiFetch = async (endpoint: string, method: string = 'GET', body: unknown = null): Promise<GameState> => {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method,
@@ -91,9 +105,10 @@ const apiFetch = async (endpoint: string, method: string = 'GET', body: unknown 
     });
 
     if (!response.ok) {
-        // Parse error response dari backend, termasuk error 400
+        // Memastikan tipe 'error' diketahui
         const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(`API Error: ${errorData.error || response.statusText}`);
+        const errorMessage = errorData.error || response.statusText;
+        throw new Error(`Failed to fetch. API Error: ${errorMessage}`);
     }
 
     return response.json() as Promise<GameState>;
@@ -111,44 +126,74 @@ const AITournamentHarness: React.FC = () => {
     const [ai2Wins, setAi2Wins] = useState<number>(0);
     const [draws, setDraws] = useState<number>(0);
     const [isSimulating, setIsSimulating] = useState<boolean>(false); 
+    const [showAllDecks, setShowAllDecks] = useState<boolean>(false); 
+    // State untuk menentukan apakah dek telah ditukar dari konfigurasi default
+    const [isDeckSwapped, setIsDeckSwapped] = useState<boolean>(false); 
     
-    // Strategi AI diset tetap karena ini adalah testing harness
+    // Strategi AI diset tetap untuk harness
     const [config] = useState<{ strategyP0: string, strategyP1: string }>({
         strategyP0: 'Minimax (Optimal)', 
         strategyP1: 'Minimax (Optimal)', 
     });
     
-    const AI_STRATEGIES = ['Minimax (Optimal)']; 
 
-    // --- LOGIKA DECK KHUSUS UNTUK TESTING HARNESS (24 Putaran) ---
+    // Toggle function for the card viewer
+    const toggleAllDecks = () => setShowAllDecks(prev => !prev);
+    
+    // Fungsi untuk menukar dek dan mereset turnamen
+    const toggleAndResetDecks = useCallback(() => {
+        setIsDeckSwapped(prev => !prev);
+        const newSwappedState = !isDeckSwapped;
+        
+        // Reset state turnamen
+        setAi1Wins(0);
+        setAi2Wins(0);
+        setDraws(0);
+        setTournamentHistory([]);
+        setIsRunning(false);
+        setCurrentRound(0);
+        setGameState(null);
+        setGameId(null);
+        
+        const p0Sets = newSwappedState ? '11-20' : '1-10';
+        const p1Sets = newSwappedState ? '1-10' : '11-20';
+        setStatusMessage(`Deck Ditukar. Siap. P0 (AI 1) menggunakan Set ${p0Sets} dan P1 (AI 2) menggunakan Set ${p1Sets}.`);
+    }, [isDeckSwapped]);
+
+    // --- LOGIKA DECK KHUSUS UNTUK TESTING HARNESS (10 Putaran) ---
     const getRoundDecks = useCallback((roundNum: number): { deckP0: number[], deckP1: number[], deckTypeP0: string, deckTypeP1: string } => {
         
-        const deckIndex = roundNum - 1; // 0 sampai 23
+        const deckIndex = roundNum - 1; // 0 sampai 9 (untuk 10 putaran)
         
         if (deckIndex < 0 || deckIndex >= TOTAL_ROUNDS) {
             return { deckP0: [], deckP1: [], deckTypeP0: 'N/A', deckTypeP1: 'N/A' };
         }
 
-        let deckP0: number[] = P0_DECKS[deckIndex];
-        let deckP1: number[] = [];
-        let deckTypeP0: string = 'Normal (Acak)';
-        let deckTypeP1: string = 'Normal (Acak)';
+        // Tentukan set kartu yang digunakan di putaran ini
+        const set1_10 = SETS_1_10[deckIndex];
+        const set11_20 = SETS_11_20[deckIndex];
 
-        if (roundNum >= 1 && roundNum <= 12) {
-            // Putaran 1-12: P0 (Normal) vs P1 (Jelek/Bad)
-            const badDeckIndex = deckIndex;
-            deckP1 = P1_BAD_DECKS[badDeckIndex];
-            deckTypeP1 = 'Jelek (Nilai Rendah)';
-            
-        } else if (roundNum >= 13 && roundNum <= 24) {
-            // Putaran 13-24: P0 (Normal) vs P1 (Normal/Fair)
-            const goodDeckIndex = deckIndex - 12;
-            deckP1 = P1_GOOD_DECKS[goodDeckIndex];
-            deckTypeP1 = 'Normal (Acak)';
+        let deckP0: number[];
+        let deckP1: number[];
+        let deckTypeP0: string;
+        let deckTypeP1: string;
+
+        if (!isDeckSwapped) {
+            // Default: P0 (Set 1-10), P1 (Set 11-20)
+            deckP0 = set1_10;
+            deckP1 = set11_20;
+            deckTypeP0 = `Set ${deckIndex + 1} (AI 1 Default)`;
+            deckTypeP1 = `Set ${deckIndex + 11} (AI 2 Default)`;
+        } else {
+            // Swapped: P0 (Set 11-20), P1 (Set 1-10)
+            deckP0 = set11_20;
+            deckP1 = set1_10;
+            deckTypeP0 = `Set ${deckIndex + 11} (AI 1 Swapped)`;
+            deckTypeP1 = `Set ${deckIndex + 1} (AI 2 Swapped)`;
         }
         
         return { deckP0, deckP1, deckTypeP0, deckTypeP1 };
-    }, []);
+    }, [isDeckSwapped]);
 
     const startRound = useCallback(async (roundNum: number) => {
         if (roundNum > TOTAL_ROUNDS) {
@@ -167,7 +212,7 @@ const AITournamentHarness: React.FC = () => {
         setStatusMessage(`Memulai Putaran ${roundNum} / ${TOTAL_ROUNDS} (P0: ${deckTypeP0}, P1: ${deckTypeP1})...`);
 
         try {
-            // KIRIM 18 KARTU UTUH (FIX: Hapus .slice(3) yang menyebabkan error 15 kartu)
+            // KIRIM 18 KARTU UTUH ke backend
             const newState = await apiFetch('/start_ai_test', 'POST', {
                 deckP0, // 18 kartu utuh
                 deckP1, // 18 kartu utuh
@@ -178,7 +223,9 @@ const AITournamentHarness: React.FC = () => {
             
             setStatusMessage(`Putaran ${roundNum} / ${TOTAL_ROUNDS} dimulai. Giliran P${newState.currentPlayerId + 1}.`);
         } catch (error) {
-            setStatusMessage(`Gagal memulai putaran ${roundNum}: ${error.message}. Pastikan backend Python (testing_api.py) berjalan.`);
+            // Memastikan tipe 'error' diketahui
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setStatusMessage(`Gagal memulai putaran ${roundNum}: ${errorMessage}. Pastikan backend Python (testing_api.py) berjalan.`);
             setIsSimulating(false);
             setIsRunning(false);
         }
@@ -233,7 +280,7 @@ const AITournamentHarness: React.FC = () => {
                 setIsSimulating(false);
 
                 if (currentRound < TOTAL_ROUNDS) {
-                    setTimeout(() => startRound(currentRound + 1), 1000); // Jeda 1 detik
+                    setTimeout(() => startRound(currentRound + 1), 1000); // Pause 1 second before next round
                 } else {
                     setStatusMessage('Turnamen Selesai!');
                     setIsRunning(false);
@@ -244,18 +291,22 @@ const AITournamentHarness: React.FC = () => {
                 setIsSimulating(false);
             }
         } catch (error) {
-            setStatusMessage(`Gagal memindahkan AI: ${error.message}`);
+            // Memastikan tipe 'error' diketahui
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setStatusMessage(`Gagal memindahkan AI: ${errorMessage}`);
             setIsSimulating(false);
             setIsRunning(false);
         }
     }, [gameId, gameState, isSimulating, currentRound, startRound, getRoundDecks]);
     
-    // Auto-run loop untuk turnamen
+    // Auto-run loop for the tournament
     useEffect(() => {
         let interval: number | null = null; 
 
+        // Karena tombol JEDA dihapus, isRunning hanya diatur ke true saat startTournament
+        // dan false saat turnamen selesai atau ada error.
         if (isRunning && gameId && gameState && !gameState.gameOver && !isSimulating) {
-            // Jeda singkat untuk simulasi cepat
+            // Short delay for fast simulation
             interval = window.setInterval(makeAIMove, 50); 
         }
 
@@ -264,14 +315,9 @@ const AITournamentHarness: React.FC = () => {
         };
     }, [isRunning, gameId, gameState, isSimulating, makeAIMove]);
 
-    const handleSingleMove = () => {
-        if (!isRunning && gameId && !gameState?.gameOver) {
-            makeAIMove();
-        }
-    };
-    
-    // --- KOMPONEN RENDER ---
+    // --- RENDER COMPONENTS ---
 
+    // Function to render a single card
     const renderCard = (value: number, playerColor: string) => (
         <div 
             className="flex items-center justify-center w-10 h-10 text-lg font-bold text-white rounded-full shadow-md transition-all duration-100"
@@ -281,6 +327,7 @@ const AITournamentHarness: React.FC = () => {
         </div>
     );
 
+    // Function to render the game board
     const renderBoard = () => {
         if (!gameState) return <div className="text-gray-500 p-8 text-center w-full bg-white rounded-lg shadow">Papan tidak tersedia. Mulai turnamen.</div>;
 
@@ -306,6 +353,7 @@ const AITournamentHarness: React.FC = () => {
         );
     };
 
+    // Function to render the player panel
     const renderPlayerPanel = (player: PlayerState, deckType: string, currentDeck: number[]) => {
         const isCurrent = player.id === gameState?.currentPlayerId && !gameState?.gameOver;
         const isWinner = player.id === gameState?.winnerId;
@@ -320,7 +368,7 @@ const AITournamentHarness: React.FC = () => {
             borderColor: color,
         };
         
-        const deckLabelColor = deckType.includes('Jelek') ? 'bg-red-200' : 'bg-green-200';
+        const deckLabelColor = player.id === 0 ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800';
         
         return (
             <div 
@@ -356,10 +404,15 @@ const AITournamentHarness: React.FC = () => {
                  <div className="mt-4">
                      <p className="text-sm font-bold text-gray-700 mb-1">Set Kartu P{player.id+1} Putaran Ini (<span className={`px-1 rounded ${deckLabelColor}`}>{deckType}</span>):</p>
                      <div className="flex flex-wrap gap-1">
-                        {/* Menampilkan 10 kartu pertama dari total 18 kartu utuh */}
+                        {/* Show first 10 cards of the 18 total cards */}
                         {currentDeck
                             .slice(0, 10).map((v, i) => (
-                            <span key={i} className={`text-xs px-1.5 py-0.5 rounded ${v <= 3 ? 'bg-red-200' : v >= 7 ? 'bg-green-200' : 'bg-yellow-200'}`}>{v}</span>
+                            <span 
+                                key={i} 
+                                className={`text-xs px-1.5 py-0.5 rounded ${v <= 3 ? 'bg-red-200' : v >= 7 ? 'bg-green-200' : 'bg-yellow-200'}`}
+                            >
+                                v
+                            </span>
                         ))}
                          <span className="text-xs text-gray-500">
                              ... ({currentDeck.length} total)
@@ -370,14 +423,86 @@ const AITournamentHarness: React.FC = () => {
         );
     };
     
+    // Function to render all card sets in a modal
+    const renderAllDecksViewer = () => {
+        if (!showAllDecks) return null;
+
+        return (
+            <div className="fixed inset-0 z-50 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
+                    <div className="flex justify-between items-center border-b pb-3 mb-4">
+                        <h2 className="text-2xl font-bold text-gray-800">20 Set Kartu Turnamen Tetap (Fixed Decks)</h2>
+                        <button onClick={toggleAllDecks} className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {FIXED_DECKS.map((deck, index) => {
+                            const setNum = index + 1;
+                            
+                            let ai1SetsRange: string;
+                            let ai2SetsRange: string;
+                            
+                            if (!isDeckSwapped) {
+                                // Default: AI 1 = Set 1-10, AI 2 = Set 11-20
+                                ai1SetsRange = '1-10';
+                                ai2SetsRange = '11-20';
+                            } else {
+                                // Swapped: AI 1 = Set 11-20, AI 2 = Set 1-10
+                                ai1SetsRange = '11-20';
+                                ai2SetsRange = '1-10';
+                            }
+
+                            // Tentukan AI mana yang menggunakan Set ini saat ini
+                            const isCurrentAI1Deck = 
+                                (!isDeckSwapped && setNum <= 10) || 
+                                (isDeckSwapped && setNum > 10);
+                            
+                            const label = isCurrentAI1Deck 
+                                ? `Set ${setNum} (AI 1: ${ai1SetsRange})`
+                                : `Set ${setNum} (AI 2: ${ai2SetsRange})`;
+                            
+                            const labelColor = isCurrentAI1Deck 
+                                ? 'bg-red-100 text-red-700' 
+                                : 'bg-green-100 text-green-700';
+
+                            return (
+                                <div key={setNum} className="p-3 border rounded-lg shadow-sm">
+                                    <p className={`text-sm font-bold mb-2 px-2 py-0.5 rounded-md text-center ${labelColor}`}>
+                                        {label}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                        {deck.map((value, cardIndex) => (
+                                            <span 
+                                                key={cardIndex} 
+                                                className={`text-xs px-1.5 py-0.5 rounded ${value <= 3 ? 'bg-red-200' : value >= 7 ? 'bg-green-200' : 'bg-yellow-200'}`}
+                                            >
+                                                {value}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        );
+    };
     
     const currentTotalRounds = tournamentHistory.length;
     
+    // Perhitungan Win Rate yang akan digunakan di JSX (memperbaiki warning unused vars)
     const ai1WinRate = currentTotalRounds > 0 ? ((ai1Wins / currentTotalRounds) * 100).toFixed(1) : 0;
     const ai2WinRate = currentTotalRounds > 0 ? ((ai2Wins / currentTotalRounds) * 100).toFixed(1) : 0;
     
-    // Ambil data dek untuk tampilan preview
+    // Get deck data for preview, ensuring currentRound is valid (min 1)
     const { deckP0: currentDeckP0, deckP1: currentDeckP1, deckTypeP0, deckTypeP1 } = getRoundDecks(currentRound > 0 ? currentRound : 1);
+
+    const currentP0Sets = isDeckSwapped ? 'Set 11-20' : 'Set 1-10';
+    const currentP1Sets = isDeckSwapped ? 'Set 1-10' : 'Set 11-20';
+
 
     return (
         <div className="p-4 md:p-8 bg-gray-50 min-h-screen font-sans">
@@ -387,11 +512,11 @@ const AITournamentHarness: React.FC = () => {
 
             {/* Panel Kontrol & Statistik */}
             <div className="mb-6 p-4 bg-white rounded-xl shadow-lg">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
                     <h2 className="text-xl font-bold text-gray-800">
                         Putaran {currentRound} / {TOTAL_ROUNDS}
                     </h2>
-                    <div className="flex space-x-3">
+                    <div className="flex flex-wrap gap-3">
                         <button
                             onClick={startTournament}
                             disabled={isSimulating}
@@ -402,23 +527,23 @@ const AITournamentHarness: React.FC = () => {
                             <RefreshCw className="w-4 h-4 mr-2" />
                             Mulai Turnamen Baru
                         </button>
+                        
+                        {/* Button Switch Deck */}
                         <button
-                            onClick={handleSingleMove}
-                            disabled={isRunning || !gameId || gameState?.gameOver || isSimulating}
-                            className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors flex items-center font-bold"
+                            onClick={toggleAndResetDecks}
+                            disabled={isRunning || isSimulating}
+                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center font-bold"
                         >
-                            <ChevronsRight className="w-4 h-4 mr-2" />
-                            Langkah Tunggal
+                            <Shuffle className="w-4 h-4 mr-2" />
+                            Switch Deck ({currentP0Sets} &lt;-&gt; {currentP1Sets})
                         </button>
+                        {/* Button Lihat Semua Set Kartu */}
                         <button
-                            onClick={() => setIsRunning(prev => !prev)}
-                            disabled={!gameId || gameState?.gameOver || isSimulating}
-                            className={`px-4 py-2 rounded-lg font-bold text-white transition-colors flex items-center ${
-                                isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-                            }`}
+                            onClick={toggleAllDecks}
+                            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center font-bold"
                         >
-                            {isRunning ? <X className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                            {isRunning ? 'JEDA SIMULASI' : 'LANJUTKAN SIMULASI'}
+                            <Eye className="w-4 h-4 mr-2" />
+                            {showAllDecks ? 'Tutup Set Kartu' : 'Lihat Semua Set Kartu'}
                         </button>
                     </div>
                 </div>
@@ -426,7 +551,7 @@ const AITournamentHarness: React.FC = () => {
                 <div className="flex justify-center gap-10 border-t pt-4">
                     <div className="text-center">
                         <p className="text-2xl font-bold" style={{ color: PLAYER_COLORS[0] }}>{ai1Wins}</p>
-                        <p className="text-sm text-gray-600">AI 1 Menang ({ai1WinRate}%)</p>
+                        <p className="text-sm text-gray-600">AI 1 Menang ({ai1WinRate}%) ({currentP0Sets})</p>
                     </div>
                     <div className="text-center">
                         <p className="text-2xl font-bold text-gray-800">{draws}</p>
@@ -434,7 +559,7 @@ const AITournamentHarness: React.FC = () => {
                     </div>
                     <div className="text-center">
                         <p className="text-2xl font-bold" style={{ color: PLAYER_COLORS[1] }}>{ai2Wins}</p>
-                        <p className="text-sm text-gray-600">AI 2 Menang ({ai2WinRate}%)</p>
+                        <p className="text-sm text-gray-600">AI 2 Menang ({ai2WinRate}%) ({currentP1Sets})</p>
                     </div>
                 </div>
 
@@ -452,20 +577,6 @@ const AITournamentHarness: React.FC = () => {
                     {gameState && gameState.players.filter(p => p.id === 0).map(p => 
                         renderPlayerPanel(p, deckTypeP0, currentDeckP0)
                     )}
-                    
-                    <div className="p-4 bg-gray-200 rounded-lg shadow-inner">
-                        <h3 className="font-bold mb-2">Pengaturan Strategi</h3>
-                        <div className="space-y-2">
-                             <label className="block text-sm font-medium text-gray-700">AI 1 Strategy:</label>
-                             <select 
-                                 className="w-full p-2 border rounded-md" 
-                                 value={config.strategyP0} 
-                                 disabled={true} 
-                             >
-                                 {AI_STRATEGIES.map(s => <option key={s} value={s}>{s}</option>)}
-                             </select>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Kolom Tengah: Papan */}
@@ -478,20 +589,6 @@ const AITournamentHarness: React.FC = () => {
                     {gameState && gameState.players.filter(p => p.id === 1).map(p => 
                         renderPlayerPanel(p, deckTypeP1, currentDeckP1)
                     )}
-
-                     <div className="p-4 bg-gray-200 rounded-lg shadow-inner">
-                        <h3 className="font-bold mb-2">Pengaturan Strategi</h3>
-                        <div className="space-y-2">
-                             <label className="block text-sm font-medium text-gray-700">AI 2 Strategy:</label>
-                             <select 
-                                 className="w-full p-2 border rounded-md" 
-                                 value={config.strategyP1} 
-                                 disabled={true}
-                             >
-                                 {AI_STRATEGIES.map(s => <option key={s} value={s}>{s}</option>)}
-                             </select>
-                        </div>
-                    </div>
                 </div>
             </div>
             
@@ -502,8 +599,8 @@ const AITournamentHarness: React.FC = () => {
                     <thead className="bg-gray-50">
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deck P0</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deck P1</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deck P0 (AI 1)</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deck P1 (AI 2)</th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Pemenang</th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Skor (P0-P1)</th>
                         </tr>
@@ -524,6 +621,9 @@ const AITournamentHarness: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+            
+            {/* Render All Decks Viewer (Modal) */}
+            {renderAllDecksViewer()}
 
         </div>
     );
