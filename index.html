@@ -4,7 +4,26 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>punto-testing</title>
+    <title>Punto AI Test Harness</title>
+    
+    <!-- Memuat Tailwind CSS dari CDN untuk memastikan styling utilitas berfungsi -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Konfigurasi Tailwind (Opsional, tapi direkomendasikan untuk kustomisasi) -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'ai-red': '#dc2626',
+              'ai-green': '#10b981',
+              'ai-blue': '#3b82f6',
+              'ai-yellow': '#fcd34d',
+            }
+          }
+        }
+      }
+    </script>
+    
   </head>
   <body>
     <div id="root"></div>

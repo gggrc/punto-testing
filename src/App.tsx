@@ -3,13 +3,13 @@ import { RefreshCw, Play, Loader2, Award, ChevronsRight, X } from 'lucide-react'
 
 // URL API default (sesuaikan dengan konfigurasi Flask/Proxy Anda)
 const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:5000' : '';
-const TOTAL_ROUNDS = 20; // Jumlah putaran default untuk turnamen
+const TOTAL_ROUNDS = 24; // Total putaran: 12 vs Jelek + 12 vs Normal
 
 // --- TYPESCRIPT INTERFACES ---
 
 interface CellState {
     value: number;
-    player: number; // Player ID (0 atau 1)
+    player: number; // ID Pemain (0 atau 1)
 }
 
 interface PlayerState {
@@ -34,42 +34,52 @@ interface GameState {
 
 interface RoundResult {
     round: number;
-    setIndexP0: number; // Set ID yang digunakan
-    setIndexP1: number;
+    deckTypeP0: string;
+    deckTypeP1: string;
     winner: 'AI 1' | 'AI 2' | 'Draw';
-    score: string; // P0-P1 score
+    score: string; // P0-P1 score (N/A jika tidak dihitung backend)
 }
 
-// Warna Pemain (sesuai dengan backend: 0=Merah, 1=Hijau, 2=Biru, 3=Kuning)
+// Warna Pemain (0=Merah, 1=Hijau, 2=Biru, 3=Kuning)
 const PLAYER_COLORS: string[] = ['#dc2626', '#10b981', '#3b82f6', '#fcd34d'];
 
 // --- DECK UTILITIES ---
 
-// Fungsi untuk membuat 18 kartu (2x 1-9), diacak
+// Fungsi Fisher-Yates shuffle
+const shuffleArray = (array: number[]): number[] => {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+};
+
+// Fungsi untuk membuat 18 kartu (2x 1-9), diacak normal
 const generateShuffledDeck = (): number[] => {
     const deck = [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9];
-    // Fisher-Yates shuffle
-    for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
-    return deck;
+    return shuffleArray(deck);
 };
 
-// Generate 20 fixed random decks
-const generateCardSets = (count: number): number[][] => {
-    const sets: number[][] = [];
-    for (let i = 0; i < count; i++) {
-        // Deck diisi 18 kartu, 3 ditarik ke tangan, sisa 15 untuk deckP0/P1
-        const fullDeck = generateShuffledDeck();
-        // Mengambil 15 kartu sisa setelah 3 kartu awal ditarik ke tangan (diurus backend)
-        sets.push(fullDeck.slice(3)); 
-    }
-    return sets;
+// Fungsi untuk membuat 18 kartu "jelek-jelek" (nilai rendah dominan)
+const generateBadDeck = (): number[] => {
+    // 4x 1, 4x 2, 4x 3, 2x 4, 2x 5, 1x 6, 1x 7 (Total 18 kartu)
+    const baseDeck = [
+        1, 1, 1, 1, 
+        2, 2, 2, 2, 
+        3, 3, 3, 3, 
+        4, 4, 5, 5, 
+        6, 7 
+    ];
+    return shuffleArray(baseDeck);
 };
 
-const CARD_SETS = generateCardSets(TOTAL_ROUNDS); // 20 set untuk 20 putaran
-const EMPTY_DECK_PREVIEW = Array(10).fill('-'); // Placeholder untuk tampilan awal
+// Generate 24 fixed decks for P0 (always standard/shuffled)
+const P0_DECKS = Array(TOTAL_ROUNDS).fill(0).map(() => generateShuffledDeck());
+// Generate 12 fixed bad decks for P1 (Rounds 1-12)
+const P1_BAD_DECKS = Array(TOTAL_ROUNDS / 2).fill(0).map(() => generateBadDeck());
+// Generate 12 fixed good decks for P1 (Rounds 13-24)
+const P1_GOOD_DECKS = Array(TOTAL_ROUNDS / 2).fill(0).map(() => generateShuffledDeck());
 
 // --- API UTILITIES ---
 
@@ -81,8 +91,9 @@ const apiFetch = async (endpoint: string, method: string = 'GET', body: unknown 
     });
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(`API Error: ${error.error || response.statusText}`);
+        // Parse error response dari backend, termasuk error 400
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(`API Error: ${errorData.error || response.statusText}`);
     }
 
     return response.json() as Promise<GameState>;
@@ -92,51 +103,54 @@ const apiFetch = async (endpoint: string, method: string = 'GET', body: unknown 
 const AITournamentHarness: React.FC = () => {
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [gameId, setGameId] = useState<string | null>(null);
-    const [statusMessage, setStatusMessage] = useState<string>('Siap untuk memulai turnamen (20 putaran).');
+    const [statusMessage, setStatusMessage] = useState<string>(`Siap untuk memulai turnamen (${TOTAL_ROUNDS} putaran).`);
     const [isRunning, setIsRunning] = useState<boolean>(false);
     const [currentRound, setCurrentRound] = useState<number>(0);
     const [tournamentHistory, setTournamentHistory] = useState<RoundResult[]>([]);
     const [ai1Wins, setAi1Wins] = useState<number>(0);
     const [ai2Wins, setAi2Wins] = useState<number>(0);
     const [draws, setDraws] = useState<number>(0);
-    const [isSimulating, setIsSimulating] = useState<boolean>(false); // State untuk mengunci tombol saat sedang simulasi/berpikir
-
-    const [config, setConfig] = useState<{ strategyP0: string, strategyP1: string }>({
-        strategyP0: 'Minimax (Default)', // Default strategy P0
-        strategyP1: 'Minimax (Default)', // Default strategy P1
+    const [isSimulating, setIsSimulating] = useState<boolean>(false); 
+    
+    // Strategi AI diset tetap karena ini adalah testing harness
+    const [config] = useState<{ strategyP0: string, strategyP1: string }>({
+        strategyP0: 'Minimax (Optimal)', 
+        strategyP1: 'Minimax (Optimal)', 
     });
     
-    // Asumsi: Backend Python yang dikirim (ai_player.py) menggunakan satu AI (Minimax). 
-    const AI_STRATEGIES = ['Minimax (Default)']; 
+    const AI_STRATEGIES = ['Minimax (Optimal)']; 
 
-    // --- LOGIKA GAME CONTROL ---
+    // --- LOGIKA DECK KHUSUS UNTUK TESTING HARNESS (24 Putaran) ---
+    const getRoundDecks = useCallback((roundNum: number): { deckP0: number[], deckP1: number[], deckTypeP0: string, deckTypeP1: string } => {
+        
+        const deckIndex = roundNum - 1; // 0 sampai 23
+        
+        if (deckIndex < 0 || deckIndex >= TOTAL_ROUNDS) {
+            return { deckP0: [], deckP1: [], deckTypeP0: 'N/A', deckTypeP1: 'N/A' };
+        }
 
-    const getRoundDecks = useCallback((roundNum: number): { deckP0: number[], deckP1: number[], setIndexP0: number, setIndexP1: number } => {
-        let setIndex1, setIndex2;
+        let deckP0: number[] = P0_DECKS[deckIndex];
+        let deckP1: number[] = [];
+        let deckTypeP0: string = 'Normal (Acak)';
+        let deckTypeP1: string = 'Normal (Acak)';
 
-        // Jika roundNum adalah 0, ini adalah state inisial, return data placeholder (tidak seharusnya dipanggil)
-        if (roundNum <= 0) {
-             // Menggunakan set 1 sebagai placeholder
-             setIndex1 = 0;
-             setIndex2 = TOTAL_ROUNDS / 2;
-        } else if (roundNum <= TOTAL_ROUNDS / 2) {
-            setIndex1 = roundNum - 1;       // Set 0 hingga 9
-            setIndex2 = roundNum - 1 + (TOTAL_ROUNDS / 2); // Set 10 hingga 19
-        } else {
-            setIndex1 = roundNum - 1;       // Set 10 hingga 19
-            setIndex2 = roundNum - 1 - (TOTAL_ROUNDS / 2);  // Set 0 hingga 9
+        if (roundNum >= 1 && roundNum <= 12) {
+            // Putaran 1-12: P0 (Normal) vs P1 (Jelek/Bad)
+            const badDeckIndex = deckIndex;
+            deckP1 = P1_BAD_DECKS[badDeckIndex];
+            deckTypeP1 = 'Jelek (Nilai Rendah)';
+            
+        } else if (roundNum >= 13 && roundNum <= 24) {
+            // Putaran 13-24: P0 (Normal) vs P1 (Normal/Fair)
+            const goodDeckIndex = deckIndex - 12;
+            deckP1 = P1_GOOD_DECKS[goodDeckIndex];
+            deckTypeP1 = 'Normal (Acak)';
         }
         
-        return { 
-            deckP0: CARD_SETS[setIndex1], 
-            deckP1: CARD_SETS[setIndex2], 
-            setIndexP0: setIndex1 + 1, 
-            setIndexP1: setIndex2 + 1 
-        };
+        return { deckP0, deckP1, deckTypeP0, deckTypeP1 };
     }, []);
 
     const startRound = useCallback(async (roundNum: number) => {
-        // Jika roundNum melebihi batas, hentikan turnamen
         if (roundNum > TOTAL_ROUNDS) {
             setStatusMessage('Turnamen Selesai!');
             setIsRunning(false);
@@ -147,14 +161,16 @@ const AITournamentHarness: React.FC = () => {
         setGameState(null);
         setGameId(null);
         setIsSimulating(true);
-        setStatusMessage(`Memulai Putaran ${roundNum} / ${TOTAL_ROUNDS}...`);
 
-        const { deckP0, deckP1 } = getRoundDecks(roundNum);
+        const { deckP0, deckP1, deckTypeP0, deckTypeP1 } = getRoundDecks(roundNum);
+        
+        setStatusMessage(`Memulai Putaran ${roundNum} / ${TOTAL_ROUNDS} (P0: ${deckTypeP0}, P1: ${deckTypeP1})...`);
 
         try {
+            // KIRIM 18 KARTU UTUH (FIX: Hapus .slice(3) yang menyebabkan error 15 kartu)
             const newState = await apiFetch('/start_ai_test', 'POST', {
-                deckP0,
-                deckP1,
+                deckP0, // 18 kartu utuh
+                deckP1, // 18 kartu utuh
             });
             setGameState(newState);
             setGameId(newState.game_id);
@@ -162,7 +178,7 @@ const AITournamentHarness: React.FC = () => {
             
             setStatusMessage(`Putaran ${roundNum} / ${TOTAL_ROUNDS} dimulai. Giliran P${newState.currentPlayerId + 1}.`);
         } catch (error) {
-            setStatusMessage(`Gagal memulai putaran ${roundNum}: ${(error as Error).message}`);
+            setStatusMessage(`Gagal memulai putaran ${roundNum}: ${error.message}. Pastikan backend Python (testing_api.py) berjalan.`);
             setIsSimulating(false);
             setIsRunning(false);
         }
@@ -189,12 +205,6 @@ const AITournamentHarness: React.FC = () => {
             setGameState(newState);
 
             if (newState.gameOver) {
-                // Perlu menghitung skor dari game.py jika backend tidak menyediakan
-                // Karena kita tidak bisa memanggil fungsi di game.py dari frontend,
-                // Kita akan asumsikan skor adalah kartu yang tersisa, atau menggunakan 
-                // data sederhana dari PlayerState (walaupun tidak ideal). 
-                // Untuk sementara, kita pakai string kosong karena backend tidak mengirimkan skor penuh.
-                const scores = 'N/A';
                 
                 let winner: 'AI 1' | 'AI 2' | 'Draw' = 'Draw';
                 if (newState.winnerId === 0) {
@@ -208,23 +218,22 @@ const AITournamentHarness: React.FC = () => {
                     winner = 'Draw';
                 }
 
-                const { setIndexP0, setIndexP1 } = getRoundDecks(currentRound);
+                const { deckTypeP0, deckTypeP1 } = getRoundDecks(currentRound);
 
                 const result: RoundResult = {
                     round: currentRound,
-                    setIndexP0,
-                    setIndexP1,
+                    deckTypeP0,
+                    deckTypeP1,
                     winner,
-                    score: scores,
+                    score: 'N/A', 
                 };
                 setTournamentHistory(prev => [...prev, result]);
                 
                 setStatusMessage(`GAME OVER Putaran ${currentRound}! Pemenang: ${winner}.`);
                 setIsSimulating(false);
 
-                // Mulai putaran berikutnya
                 if (currentRound < TOTAL_ROUNDS) {
-                    setTimeout(() => startRound(currentRound + 1), 1000); // Jeda 1 detik sebelum putaran baru
+                    setTimeout(() => startRound(currentRound + 1), 1000); // Jeda 1 detik
                 } else {
                     setStatusMessage('Turnamen Selesai!');
                     setIsRunning(false);
@@ -235,7 +244,7 @@ const AITournamentHarness: React.FC = () => {
                 setIsSimulating(false);
             }
         } catch (error) {
-            setStatusMessage(`Gagal memindahkan AI: ${(error as Error).message}`);
+            setStatusMessage(`Gagal memindahkan AI: ${error.message}`);
             setIsSimulating(false);
             setIsRunning(false);
         }
@@ -243,10 +252,10 @@ const AITournamentHarness: React.FC = () => {
     
     // Auto-run loop untuk turnamen
     useEffect(() => {
-        let interval: number | null = null; // Diubah dari NodeJS.Timeout ke number
+        let interval: number | null = null; 
 
         if (isRunning && gameId && gameState && !gameState.gameOver && !isSimulating) {
-            // Jeda 50ms untuk simulasi cepat
+            // Jeda singkat untuk simulasi cepat
             interval = window.setInterval(makeAIMove, 50); 
         }
 
@@ -297,25 +306,26 @@ const AITournamentHarness: React.FC = () => {
         );
     };
 
-    const renderPlayerPanel = (player: PlayerState) => {
+    const renderPlayerPanel = (player: PlayerState, deckType: string, currentDeck: number[]) => {
         const isCurrent = player.id === gameState?.currentPlayerId && !gameState?.gameOver;
         const isWinner = player.id === gameState?.winnerId;
         const color = PLAYER_COLORS[player.color_id];
-        const playerColorName = player.id === 0 ? 'Merah' : 'Hijau'; // Berdasarkan PLAYER_COLORS[0] dan [1]
+        const playerColorName = player.id === 0 ? 'Merah' : 'Hijau'; 
         
-        // Dynamic styles for the active ring effect
         const activeStyle = isCurrent ? {
             borderColor: color,
-            boxShadow: `0 0 0 4px white, 0 0 0 6px ${color}`, // Custom shadow for ring effect
+            boxShadow: `0 0 0 4px white, 0 0 0 6px ${color}`,
             transform: 'scale(1.02)'
         } : {
             borderColor: color,
         };
         
+        const deckLabelColor = deckType.includes('Jelek') ? 'bg-red-200' : 'bg-green-200';
+        
         return (
             <div 
                 className={`p-4 rounded-xl shadow-lg transition-all duration-300 bg-white border-2 ${isCurrent ? 'opacity-100' : 'opacity-90'}`}
-                style={{ ...activeStyle }} // Aplikasikan style dinamis
+                style={{ ...activeStyle }}
             >
                 <h3 className="text-xl font-bold flex items-center mb-2" style={{ color }}>
                     {player.name} ({playerColorName})
@@ -342,20 +352,32 @@ const AITournamentHarness: React.FC = () => {
                         </div>
                     ))}
                 </div>
+                
+                 <div className="mt-4">
+                     <p className="text-sm font-bold text-gray-700 mb-1">Set Kartu P{player.id+1} Putaran Ini (<span className={`px-1 rounded ${deckLabelColor}`}>{deckType}</span>):</p>
+                     <div className="flex flex-wrap gap-1">
+                        {/* Menampilkan 10 kartu pertama dari total 18 kartu utuh */}
+                        {currentDeck
+                            .slice(0, 10).map((v, i) => (
+                            <span key={i} className={`text-xs px-1.5 py-0.5 rounded ${v <= 3 ? 'bg-red-200' : v >= 7 ? 'bg-green-200' : 'bg-yellow-200'}`}>{v}</span>
+                        ))}
+                         <span className="text-xs text-gray-500">
+                             ... ({currentDeck.length} total)
+                         </span>
+                     </div>
+                </div>
             </div>
         );
     };
     
     
-    // Variabel totalCardsPlayed tidak lagi dihitung di sini karena tidak digunakan di JSX
-    // const totalCardsPlayed = calculateTotalCardsPlayed(); 
     const currentTotalRounds = tournamentHistory.length;
     
     const ai1WinRate = currentTotalRounds > 0 ? ((ai1Wins / currentTotalRounds) * 100).toFixed(1) : 0;
     const ai2WinRate = currentTotalRounds > 0 ? ((ai2Wins / currentTotalRounds) * 100).toFixed(1) : 0;
     
     // Ambil data dek untuk tampilan preview
-    const { deckP0: currentDeckP0, deckP1: currentDeckP1 } = getRoundDecks(currentRound > 0 ? currentRound : 1);
+    const { deckP0: currentDeckP0, deckP1: currentDeckP1, deckTypeP0, deckTypeP1 } = getRoundDecks(currentRound > 0 ? currentRound : 1);
 
     return (
         <div className="p-4 md:p-8 bg-gray-50 min-h-screen font-sans">
@@ -425,9 +447,11 @@ const AITournamentHarness: React.FC = () => {
 
             {/* Papan Permainan dan Info Pemain */}
             <div className="grid md:grid-cols-3 gap-8 mb-8">
-                {/* Kolom Kiri: AI 1 */}
+                {/* Kolom Kiri: AI 1 (P0) */}
                 <div className="md:col-span-1 space-y-4">
-                    {gameState && gameState.players.filter(p => p.id === 0).map(p => renderPlayerPanel(p))}
+                    {gameState && gameState.players.filter(p => p.id === 0).map(p => 
+                        renderPlayerPanel(p, deckTypeP0, currentDeckP0)
+                    )}
                     
                     <div className="p-4 bg-gray-200 rounded-lg shadow-inner">
                         <h3 className="font-bold mb-2">Pengaturan Strategi</h3>
@@ -436,23 +460,10 @@ const AITournamentHarness: React.FC = () => {
                              <select 
                                  className="w-full p-2 border rounded-md" 
                                  value={config.strategyP0} 
-                                 onChange={(e) => setConfig(prev => ({...prev, strategyP0: e.target.value}))}
-                                 disabled={isSimulating || isRunning}
+                                 disabled={true} 
                              >
                                  {AI_STRATEGIES.map(s => <option key={s} value={s}>{s}</option>)}
                              </select>
-                        </div>
-                         <div className="mt-4">
-                             <p className="text-sm font-bold text-gray-700 mb-1">Set Kartu P0 Putaran Ini:</p>
-                             <div className="flex flex-wrap gap-1">
-                                {(currentRound > 0 ? currentDeckP0 : EMPTY_DECK_PREVIEW)
-                                    .slice(0, 10).map((v, i) => (
-                                    <span key={i} className="text-xs bg-gray-300 px-1.5 py-0.5 rounded">{v}</span>
-                                ))}
-                                 <span className="text-xs text-gray-500">
-                                     ... ({currentRound > 0 ? currentDeckP0.length : 15} sisa)
-                                 </span>
-                             </div>
                         </div>
                     </div>
                 </div>
@@ -462,9 +473,11 @@ const AITournamentHarness: React.FC = () => {
                     {renderBoard()}
                 </div>
 
-                {/* Kolom Kanan: AI 2 */}
+                {/* Kolom Kanan: AI 2 (P1) */}
                 <div className="md:col-span-1 space-y-4">
-                    {gameState && gameState.players.filter(p => p.id === 1).map(p => renderPlayerPanel(p))}
+                    {gameState && gameState.players.filter(p => p.id === 1).map(p => 
+                        renderPlayerPanel(p, deckTypeP1, currentDeckP1)
+                    )}
 
                      <div className="p-4 bg-gray-200 rounded-lg shadow-inner">
                         <h3 className="font-bold mb-2">Pengaturan Strategi</h3>
@@ -473,23 +486,10 @@ const AITournamentHarness: React.FC = () => {
                              <select 
                                  className="w-full p-2 border rounded-md" 
                                  value={config.strategyP1} 
-                                 onChange={(e) => setConfig(prev => ({...prev, strategyP1: e.target.value}))}
-                                 disabled={isSimulating || isRunning}
+                                 disabled={true}
                              >
                                  {AI_STRATEGIES.map(s => <option key={s} value={s}>{s}</option>)}
                              </select>
-                        </div>
-                        <div className="mt-4">
-                             <p className="text-sm font-bold text-gray-700 mb-1">Set Kartu P1 Putaran Ini:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {(currentRound > 0 ? currentDeckP1 : EMPTY_DECK_PREVIEW)
-                                    .slice(0, 10).map((v, i) => (
-                                    <span key={i} className="text-xs bg-gray-300 px-1.5 py-0.5 rounded">{v}</span>
-                                ))}
-                                 <span className="text-xs text-gray-500">
-                                     ... ({currentRound > 0 ? currentDeckP1.length : 15} sisa)
-                                 </span>
-                             </div>
                         </div>
                     </div>
                 </div>
@@ -502,8 +502,8 @@ const AITournamentHarness: React.FC = () => {
                     <thead className="bg-gray-50">
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Set P0</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Set P1</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deck P0</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deck P1</th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Pemenang</th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Skor (P0-P1)</th>
                         </tr>
@@ -515,8 +515,8 @@ const AITournamentHarness: React.FC = () => {
                                 className={result.winner === 'AI 1' ? 'bg-red-50' : result.winner === 'AI 2' ? 'bg-green-50' : 'bg-yellow-50'}
                             >
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{result.round}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Set {result.setIndexP0}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Set {result.setIndexP1}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{result.deckTypeP0}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{result.deckTypeP1}</td>
                                 <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold text-center ${result.winner === 'AI 1' ? 'text-red-600' : result.winner === 'AI 2' ? 'text-green-600' : 'text-yellow-600'}`}>{result.winner}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{result.score}</td>
                             </tr>
