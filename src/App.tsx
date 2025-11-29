@@ -3,7 +3,6 @@ import { RefreshCw, Loader2, Award, X, Eye, Shuffle } from 'lucide-react';
 
 // URL API default (sesuaikan dengan konfigurasi Flask/Proxy Anda)
 // Logic: Jika bukan localhost, gunakan VITE_APP_API_URL dari environment variable
-// Anda HARUS MENGATUR VITE_APP_API_URL di Vercel ke URL publik backend Anda.
 const API_BASE_URL = 
     (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'))
     ? 'http://localhost:5000' 
@@ -118,6 +117,7 @@ const apiFetch = async (endpoint: string, method: string = 'GET', body: unknown 
         // Memastikan tipe 'error' diketahui
         const errorData = await response.json().catch(() => ({ error: response.statusText }));
         const errorMessage = errorData.error || response.statusText;
+        // Memberikan URL yang dicoba dalam pesan error untuk debugging
         throw new Error(`Failed to fetch. API Error: ${errorMessage}. URL attempted: ${url}`);
     }
 
@@ -139,8 +139,6 @@ const AITournamentHarness: React.FC = () => {
     const [showAllDecks, setShowAllDecks] = useState<boolean>(false); 
     // State untuk menentukan apakah dek telah ditukar dari konfigurasi default
     const [isDeckSwapped, setIsDeckSwapped] = useState<boolean>(false); 
-    
-    // Strategi AI diset tetap untuk harness
 
     // Toggle function for the card viewer
     const toggleAllDecks = () => setShowAllDecks(prev => !prev);
