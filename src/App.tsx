@@ -2,11 +2,12 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { RefreshCw, Loader2, Award, X, Eye, Shuffle } from 'lucide-react';
 
 // URL API default (sesuaikan dengan konfigurasi Flask/Proxy Anda)
-// Logic: Jika bukan localhost, URL akan menjadi string kosong ('') untuk memicu Vercel Rewrite
+// Logic: Jika bukan localhost, URL akan menjadi string kosong ('') 
+// untuk memicu Vercel Proxy/Rewrite (berlaku untuk semua sub-domain Vercel)
 const API_BASE_URL = 
     (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'))
     ? 'http://localhost:5000' 
-    : ''; // Memicu Vercel Proxy/Rewrite melalui vercel.json
+    : ''; // Memicu Vercel Rewrite melalui vercel.json
 
 const TOTAL_ROUNDS = 10; // Total putaran disesuaikan menjadi 10
 
@@ -238,7 +239,7 @@ const AITournamentHarness: React.FC = () => {
         } catch (error) {
             // Memastikan tipe 'error' diketahui
             const errorMessage = error instanceof Error ? error.message : String(error);
-            setStatusMessage(`Gagal memulai putaran ${roundNum}: ${errorMessage}. Pastikan backend Python (testing_api.py) berjalan.`);
+            setStatusMessage(`Gagal memulai putaran ${roundNum}: ${errorMessage}. Pastikan backend Python (app_api.py) berjalan.`);
             setIsSimulating(false);
             setIsRunning(false);
         }
