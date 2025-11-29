@@ -6,7 +6,7 @@ import { RefreshCw, Loader2, Award, X, Eye, Shuffle } from 'lucide-react';
 const API_BASE_URL = 
     (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'))
     ? 'http://localhost:5000' 
-    : ''; // Di deployment, ini akan menjadi dasar path relatif
+    : ''; // Memicu Vercel Proxy/Rewrite melalui vercel.json
 
 const TOTAL_ROUNDS = 10; // Total putaran disesuaikan menjadi 10
 
@@ -149,7 +149,7 @@ const AITournamentHarness: React.FC = () => {
     const [showAllDecks, setShowAllDecks] = useState<boolean>(false); 
     // State untuk menentukan apakah dek telah ditukar dari konfigurasi default
     const [isDeckSwapped, setIsDeckSwapped] = useState<boolean>(false); 
-
+   
     // Toggle function for the card viewer
     const toggleAllDecks = () => setShowAllDecks(prev => !prev);
     
