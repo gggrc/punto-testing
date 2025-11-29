@@ -2,16 +2,20 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/start_game",
-      "destination": "https://punto-backend-production.up.railway.app/start_game"
+      "source": "/start_ai_test",
+      "destination": "https://punto-backend-production.up.railway.app/start_ai_test"
+    },
+    {
+      "source": "/ai_move",
+      "destination": "https://punto-backend-production.up.railway.app/ai_move"
     },
     {
       "source": "/make_move",
       "destination": "https://punto-backend-production.up.railway.app/make_move"
     },
     {
-      "source": "/ai_move",
-      "destination": "https://punto-backend-production.up.railway.app/ai_move"
+      "source": "/start_game",
+      "destination": "https://punto-backend-production.up.railway.app/start_game"
     }
   ]
 }
