@@ -3,6 +3,7 @@ import { RefreshCw, Loader2, Award, X, Eye, Shuffle } from 'lucide-react';
 
 // URL API default (sesuaikan dengan konfigurasi Flask/Proxy Anda)
 // Logic: Jika bukan localhost, gunakan VITE_APP_API_URL dari environment variable
+// Anda HARUS MENGATUR VITE_APP_API_URL di Vercel ke URL publik backend Anda.
 const API_BASE_URL = 
     (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'))
     ? 'http://localhost:5000' 
@@ -78,7 +79,7 @@ const FIXED_DECKS: number[][] = [
     // Set 12
     [1, 6, 3, 4, 6, 4, 7, 7, 9, 3, 5, 5, 8, 2, 2, 1, 9, 8],
     // Set 13
-    [9, 8, 9, 3, 4, 6, 6, 7, 3, 1, 1, 2, 5, 2, 4, 1, 8, 5, 7],
+    [9, 8, 9, 3, 4, 6, 6, 7, 3, 1, 1, 2, 5, 2, 4, 8, 5, 7],
     // Set 14
     [2, 6, 5, 9, 1, 6, 3, 7, 7, 2, 9, 1, 8, 8, 4, 3, 5, 4],
     // Set 15
@@ -104,7 +105,10 @@ const SETS_11_20 = FIXED_DECKS.slice(10, 20).map(deck => deck.slice()); // Sets 
 
 // Helper function to handle API calls with error parsing
 const apiFetch = async (endpoint: string, method: string = 'GET', body: unknown = null): Promise<GameState> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    // Memastikan URL API Base digunakan, terutama saat deployment
+    const url = API_BASE_URL.endsWith('/') ? `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}` : `${API_BASE_URL}${endpoint}`;
+
+    const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : null,
@@ -114,7 +118,7 @@ const apiFetch = async (endpoint: string, method: string = 'GET', body: unknown 
         // Memastikan tipe 'error' diketahui
         const errorData = await response.json().catch(() => ({ error: response.statusText }));
         const errorMessage = errorData.error || response.statusText;
-        throw new Error(`Failed to fetch. API Error: ${errorMessage}`);
+        throw new Error(`Failed to fetch. API Error: ${errorMessage}. URL attempted: ${url}`);
     }
 
     return response.json() as Promise<GameState>;
@@ -136,7 +140,8 @@ const AITournamentHarness: React.FC = () => {
     // State untuk menentukan apakah dek telah ditukar dari konfigurasi default
     const [isDeckSwapped, setIsDeckSwapped] = useState<boolean>(false); 
     
-   
+    // Strategi AI diset tetap untuk harness
+
     // Toggle function for the card viewer
     const toggleAllDecks = () => setShowAllDecks(prev => !prev);
     
@@ -213,7 +218,7 @@ const AITournamentHarness: React.FC = () => {
 
         try {
             // KIRIM 18 KARTU UTUH ke backend
-            const newState = await apiFetch('/start_ai_test', 'POST', {
+            const newState = await apiFetch('start_ai_test', 'POST', {
                 deckP0, // 18 kartu utuh
                 deckP1, // 18 kartu utuh
             });
@@ -248,7 +253,7 @@ const AITournamentHarness: React.FC = () => {
         setStatusMessage(`AI P${gameState!.currentPlayerId + 1} sedang berpikir...`);
 
         try {
-            const newState = await apiFetch('/ai_move', 'POST', { gameId });
+            const newState = await apiFetch('ai_move', 'POST', { gameId });
             setGameState(newState);
 
             if (newState.gameOver) {
