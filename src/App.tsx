@@ -2,7 +2,12 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { RefreshCw, Loader2, Award, X, Eye, Shuffle } from 'lucide-react';
 
 // URL API default (sesuaikan dengan konfigurasi Flask/Proxy Anda)
-const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:5000' : '';
+// Logic: Jika bukan localhost, gunakan VITE_APP_API_URL dari environment variable
+const API_BASE_URL = 
+    (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'))
+    ? 'http://localhost:5000' 
+    : import.meta.env.VITE_APP_API_URL || ''; // Gunakan ENV variable di deployment
+
 const TOTAL_ROUNDS = 10; // Total putaran disesuaikan menjadi 10
 
 // --- TYPESCRIPT INTERFACES ---
@@ -43,6 +48,7 @@ interface RoundResult {
 // Warna Pemain (0=Merah, 1=Hijau, 2=Biru, 3=Kuning)
 const PLAYER_COLORS: string[] = ['#dc2626', '#10b981', '#3b82f6', '#fcd34d'];
 
+
 // --- FIXED DECKS BERDASARKAN GAMBAR (Total 20 Set) ---
 // DIPASTIKAN SEMUA MEMILIKI 18 ELEMEN
 const FIXED_DECKS: number[][] = [
@@ -72,7 +78,7 @@ const FIXED_DECKS: number[][] = [
     // Set 12
     [1, 6, 3, 4, 6, 4, 7, 7, 9, 3, 5, 5, 8, 2, 2, 1, 9, 8],
     // Set 13
-    [9, 8, 9, 3, 4, 6, 6, 7, 3, 1, 1, 2, 5, 2, 4, 1, 8, 5, 7],
+    [9, 8, 9, 3, 4, 6, 6, 7, 3, 1, 1, 2, 5, 2, 4, 8, 5, 7],
     // Set 14
     [2, 6, 5, 9, 1, 6, 3, 7, 7, 2, 9, 1, 8, 8, 4, 3, 5, 4],
     // Set 15
@@ -129,13 +135,6 @@ const AITournamentHarness: React.FC = () => {
     const [showAllDecks, setShowAllDecks] = useState<boolean>(false); 
     // State untuk menentukan apakah dek telah ditukar dari konfigurasi default
     const [isDeckSwapped, setIsDeckSwapped] = useState<boolean>(false); 
-    
-    // Strategi AI diset tetap untuk harness
-    const [config] = useState<{ strategyP0: string, strategyP1: string }>({
-        strategyP0: 'Minimax (Optimal)', 
-        strategyP1: 'Minimax (Optimal)', 
-    });
-    
 
     // Toggle function for the card viewer
     const toggleAllDecks = () => setShowAllDecks(prev => !prev);
@@ -304,7 +303,6 @@ const AITournamentHarness: React.FC = () => {
         let interval: number | null = null; 
 
         // Karena tombol JEDA dihapus, isRunning hanya diatur ke true saat startTournament
-        // dan false saat turnamen selesai atau ada error.
         if (isRunning && gameId && gameState && !gameState.gameOver && !isSimulating) {
             // Short delay for fast simulation
             interval = window.setInterval(makeAIMove, 50); 
@@ -353,7 +351,7 @@ const AITournamentHarness: React.FC = () => {
         );
     };
 
-    // Function to render the player panel
+    // Function to render the player panel (Diperbarui untuk menandai kartu yang dimainkan pada Set Statis)
     const renderPlayerPanel = (player: PlayerState, deckType: string, currentDeck: number[]) => {
         const isCurrent = player.id === gameState?.currentPlayerId && !gameState?.gameOver;
         const isWinner = player.id === gameState?.winnerId;
@@ -369,6 +367,11 @@ const AITournamentHarness: React.FC = () => {
         };
         
         const deckLabelColor = player.id === 0 ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800';
+
+        // --- Logika Menghitung Kartu yang Dimainkan ---
+        const totalCardsInSet = 18;
+        const cardsRemaining = player.hand_count + player.deck_count;
+        const cardsPlayed = totalCardsInSet - cardsRemaining;
         
         return (
             <div 
@@ -381,15 +384,14 @@ const AITournamentHarness: React.FC = () => {
                     {isWinner && <Award className="ml-2 w-5 h-5 text-yellow-500" />}
                 </h3>
                 
-                <p className="text-sm text-gray-600 mb-2">
-                    Strategi: <span className="font-semibold text-gray-800">{player.id === 0 ? config.strategyP0 : config.strategyP1}</span>
-                </p>
+                {/* Bagian Dinamis Kartu Sisa (Hand + Deck Count) - INI YANG BERKURANG */}
                 <p className="text-sm text-gray-600 mb-2 font-mono">
-                    Kartu Sisa: <span className="font-semibold">{player.hand_count} (Hand) + {player.deck_count} (Deck)</span>
+                    Kartu Sisa: <span className="font-semibold">{player.hand_count} (Tangan) + {player.deck_count} (Deck)</span>
                 </p>
                 
+                {/* Tampilan Hand (Dinamsis dan Berkurang) */}
                 <div className="flex flex-wrap gap-1 border-t pt-2 mt-2">
-                    <span className="text-sm font-medium text-gray-500 mr-2">Hand:</span>
+                    <span className="text-sm font-medium text-gray-500 mr-2">Kartu di Tangan:</span>
                     {player.hand.map((cardValue, index) => (
                         <div 
                             key={index}
@@ -399,23 +401,29 @@ const AITournamentHarness: React.FC = () => {
                             {cardValue}
                         </div>
                     ))}
+                    {player.hand_count === 0 && <span className="text-sm text-gray-500">Kosong.</span>}
                 </div>
                 
-                 <div className="mt-4">
+                 {/* Tampilan Set Kartu Statis (18 kartu penuh) - Menandai kartu yang Dimainkan */}
+                 <div className="mt-4 border-t pt-2">
                      <p className="text-sm font-bold text-gray-700 mb-1">Set Kartu P{player.id+1} Putaran Ini (<span className={`px-1 rounded ${deckLabelColor}`}>{deckType}</span>):</p>
                      <div className="flex flex-wrap gap-1">
-                        {/* Show first 10 cards of the 18 total cards */}
                         {currentDeck
-                            .slice(0, 10).map((v, i) => (
-                            <span 
-                                key={i} 
-                                className={`text-xs px-1.5 py-0.5 rounded ${v <= 3 ? 'bg-red-200' : v >= 7 ? 'bg-green-200' : 'bg-yellow-200'}`}
-                            >
-                                v
-                            </span>
-                        ))}
-                         <span className="text-xs text-gray-500">
-                             ... ({currentDeck.length} total)
+                            .map((v, i) => {
+                            const isPlayed = i < cardsPlayed; // Tandai kartu dari indeks 0 hingga cardsPlayed-1
+                            const playedStyle = isPlayed ? 'line-through opacity-50' : '';
+
+                            return (
+                                <span 
+                                    key={i} 
+                                    className={`text-xs px-1.5 py-0.5 rounded ${v <= 3 ? 'bg-red-200' : v >= 7 ? 'bg-green-200' : 'bg-yellow-200'} ${playedStyle}`}
+                                >
+                                    {v}
+                                </span>
+                            );
+                        })}
+                         <span className="text-xs text-gray-500 ml-1">
+                             (18 total)
                          </span>
                      </div>
                 </div>
@@ -510,7 +518,7 @@ const AITournamentHarness: React.FC = () => {
                 Punto AI Test Harness (Turnamen AI vs AI)
             </h1>
 
-            {/* Panel Kontrol & Statistik */}
+            {/* Control Panel & Statistik */}
             <div className="mb-6 p-4 bg-white rounded-xl shadow-lg">
                 <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
                     <h2 className="text-xl font-bold text-gray-800">
