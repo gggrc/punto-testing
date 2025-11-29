@@ -9,6 +9,5 @@
       "source": "/ai_move",
       "destination": "https://punto-backend-production.up.railway.app/ai_move"
     }
-    /* Menghapus rewrite untuk /make_move dan /start_game karena tidak digunakan oleh App.tsx dan tidak didefinisikan di testing_api.py */
   ]
 }
