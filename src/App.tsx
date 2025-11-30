@@ -554,7 +554,7 @@ const AITournamentHarness: React.FC = () => {
     return (
         <div className="p-4 md:p-8 bg-gray-50 min-h-screen font-sans">
             <h1 className="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">
-                Punto AI Test Harness (Turnamen AI vs AI)
+                Punto AI Test (Turnamen AI vs AI)
             </h1>
 
             {/* Control Panel & Statistik */}
