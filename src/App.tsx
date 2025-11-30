@@ -9,7 +9,7 @@ const API_BASE_URL =
     ? 'http://localhost:5000' 
     : ''; // Memicu Vercel Rewrite melalui vercel.json
 
-const TOTAL_ROUNDS = 10; // Total putaran disesuaikan menjadi 10
+const TOTAL_ROUNDS = 16; // Total putaran disesuaikan menjadi 16
 
 // --- TYPESCRIPT INTERFACES ---
 
@@ -50,7 +50,7 @@ interface RoundResult {
 const PLAYER_COLORS: string[] = ['#dc2626', '#10b981', '#3b82f6', '#fcd34d'];
 
 
-// --- FIXED DECKS BERDASARKAN GAMBAR (Total 20 Set) ---
+// --- FIXED DECKS BERDASARKAN GAMBAR (Total 32 Set, 18 kartu per set) ---
 // DIPASTIKAN SEMUA MEMILIKI 18 ELEMEN
 const FIXED_DECKS: number[][] = [
     // Set 1
@@ -94,11 +94,35 @@ const FIXED_DECKS: number[][] = [
     [9, 1, 9, 4, 5, 5, 2, 2, 3, 8, 8, 7, 4, 3, 7, 1, 6, 6],
     // Set 20
     [2, 4, 7, 1, 6, 2, 5, 3, 8, 3, 5, 7, 4, 8, 9, 1, 9, 6],
+    // Set 21
+    [1, 5, 8, 4, 7, 3, 9, 2, 6, 1, 5, 8, 4, 7, 3, 9, 2, 6],
+    // Set 22
+    [4, 2, 7, 5, 1, 6, 3, 9, 8, 4, 2, 7, 5, 1, 6, 3, 9, 8],
+    // Set 23
+    [8, 3, 6, 1, 9, 4, 5, 7, 2, 8, 3, 6, 1, 9, 4, 5, 7, 2],
+    // Set 24
+    [7, 6, 1, 8, 5, 2, 9, 4, 3, 7, 6, 1, 8, 5, 2, 9, 4, 3],
+    // Set 25
+    [2, 9, 4, 6, 3, 8, 1, 5, 7, 2, 9, 4, 6, 3, 8, 1, 5, 7],
+    // Set 26
+    [5, 4, 7, 9, 2, 1, 6, 8, 3, 5, 4, 7, 9, 2, 1, 6, 8, 3],
+    // Set 27
+    [3, 8, 2, 7, 6, 5, 4, 1, 9, 3, 8, 2, 7, 6, 5, 4, 1, 9],
+    // Set 28
+    [6, 7, 5, 3, 9, 2, 8, 1, 4, 6, 7, 5, 3, 9, 2, 8, 1, 4],
+    // Set 29
+    [9, 1, 3, 5, 7, 4, 2, 6, 8, 9, 1, 3, 5, 7, 4, 2, 6, 8],
+    // Set 30
+    [1, 9, 4, 8, 3, 7, 2, 6, 5, 1, 9, 4, 8, 3, 7, 2, 6, 5],
+    // Set 31
+    [5, 2, 6, 3, 8, 1, 9, 4, 7, 5, 2, 6, 3, 8, 1, 9, 4, 7],
+    // Set 32
+    [4, 6, 8, 2, 5, 9, 1, 7, 3, 4, 6, 8, 2, 5, 9, 1, 7, 3],
 ];
 
-// Pisahkan 20 set menjadi dua grup 10
-const SETS_1_10 = FIXED_DECKS.slice(0, 10).map(deck => deck.slice()); // Sets 1-10
-const SETS_11_20 = FIXED_DECKS.slice(10, 20).map(deck => deck.slice()); // Sets 11-20
+// Pisahkan 32 set menjadi dua grup 16
+const SETS_1_16 = FIXED_DECKS.slice(0, 16).map(deck => deck.slice()); // Sets 1-16
+const SETS_17_32 = FIXED_DECKS.slice(16, 32).map(deck => deck.slice()); // Sets 17-32
 
 
 // --- API UTILITIES ---
@@ -169,23 +193,23 @@ const AITournamentHarness: React.FC = () => {
         setGameState(null);
         setGameId(null);
         
-        const p0Sets = newSwappedState ? '11-20' : '1-10';
-        const p1Sets = newSwappedState ? '1-10' : '11-20';
+        const p0Sets = newSwappedState ? '17-32' : '1-16'; // Diperbarui: 16 set
+        const p1Sets = newSwappedState ? '1-16' : '17-32'; // Diperbarui: 16 set
         setStatusMessage(`Deck Ditukar. Siap. P0 (AI 1) menggunakan Set ${p0Sets} dan P1 (AI 2) menggunakan Set ${p1Sets}.`);
     }, [isDeckSwapped]);
 
-    // --- LOGIKA DECK KHUSUS UNTUK TESTING HARNESS (10 Putaran) ---
+    // --- LOGIKA DECK KHUSUS UNTUK TESTING HARNESS (16 Putaran) ---
     const getRoundDecks = useCallback((roundNum: number): { deckP0: number[], deckP1: number[], deckTypeP0: string, deckTypeP1: string } => {
         
-        const deckIndex = roundNum - 1; // 0 sampai 9 (untuk 10 putaran)
+        const deckIndex = roundNum - 1; // 0 sampai 15 (untuk 16 putaran)
         
-        if (deckIndex < 0 || deckIndex >= TOTAL_ROUNDS) {
+        if (deckIndex < 0 || deckIndex >= TOTAL_ROUNDS) { // TOTAL_ROUNDS = 16
             return { deckP0: [], deckP1: [], deckTypeP0: 'N/A', deckTypeP1: 'N/A' };
         }
 
         // Tentukan set kartu yang digunakan di putaran ini
-        const set1_10 = SETS_1_10[deckIndex];
-        const set11_20 = SETS_11_20[deckIndex];
+        const set1_16 = SETS_1_16[deckIndex]; // Menggunakan Sets 1-16
+        const set17_32 = SETS_17_32[deckIndex]; // Menggunakan Sets 17-32
 
         let deckP0: number[];
         let deckP1: number[];
@@ -193,16 +217,16 @@ const AITournamentHarness: React.FC = () => {
         let deckTypeP1: string;
 
         if (!isDeckSwapped) {
-            // Default: P0 (Set 1-10), P1 (Set 11-20)
-            deckP0 = set1_10;
-            deckP1 = set11_20;
+            // Default: P0 (Set 1-16), P1 (Set 17-32)
+            deckP0 = set1_16;
+            deckP1 = set17_32;
             deckTypeP0 = `Set ${deckIndex + 1} (AI 1 Default)`;
-            deckTypeP1 = `Set ${deckIndex + 11} (AI 2 Default)`;
+            deckTypeP1 = `Set ${deckIndex + 17} (AI 2 Default)`; // Mulai dari Set 17
         } else {
-            // Swapped: P0 (Set 11-20), P1 (Set 1-10)
-            deckP0 = set11_20;
-            deckP1 = set1_10;
-            deckTypeP0 = `Set ${deckIndex + 11} (AI 1 Swapped)`;
+            // Swapped: P0 (Set 17-32), P1 (Set 1-16)
+            deckP0 = set17_32;
+            deckP1 = set1_16;
+            deckTypeP0 = `Set ${deckIndex + 17} (AI 1 Swapped)`; // Mulai dari Set 17
             deckTypeP1 = `Set ${deckIndex + 1} (AI 2 Swapped)`;
         }
         
@@ -454,7 +478,7 @@ const AITournamentHarness: React.FC = () => {
             <div className="fixed inset-0 z-50 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
                     <div className="flex justify-between items-center border-b pb-3 mb-4">
-                        <h2 className="text-2xl font-bold text-gray-800">20 Set Kartu Turnamen Tetap (Fixed Decks)</h2>
+                        <h2 className="text-2xl font-bold text-gray-800">32 Set Kartu Turnamen Tetap (Fixed Decks)</h2>
                         <button onClick={toggleAllDecks} className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600">
                             <X className="w-6 h-6" />
                         </button>
@@ -468,19 +492,19 @@ const AITournamentHarness: React.FC = () => {
                             let ai2SetsRange: string;
                             
                             if (!isDeckSwapped) {
-                                // Default: AI 1 = Set 1-10, AI 2 = Set 11-20
-                                ai1SetsRange = '1-10';
-                                ai2SetsRange = '11-20';
+                                // Default: AI 1 = Set 1-16, AI 2 = Set 17-32
+                                ai1SetsRange = '1-16';
+                                ai2SetsRange = '17-32';
                             } else {
-                                // Swapped: AI 1 = Set 11-20, AI 2 = Set 1-10
-                                ai1SetsRange = '11-20';
-                                ai2SetsRange = '1-10';
+                                // Swapped: AI 1 = Set 17-32, AI 2 = Set 1-16
+                                ai1SetsRange = '17-32';
+                                ai2SetsRange = '1-16';
                             }
 
                             // Tentukan AI mana yang menggunakan Set ini saat ini
                             const isCurrentAI1Deck = 
-                                (!isDeckSwapped && setNum <= 10) || 
-                                (isDeckSwapped && setNum > 10);
+                                (!isDeckSwapped && setNum <= 16) || // Diperbarui: <= 16
+                                (isDeckSwapped && setNum > 16); // Diperbarui: > 16
                             
                             const label = isCurrentAI1Deck 
                                 ? `Set ${setNum} (AI 1: ${ai1SetsRange})`
@@ -523,8 +547,8 @@ const AITournamentHarness: React.FC = () => {
     // Get deck data for preview, ensuring currentRound is valid (min 1)
     const { deckP0: currentDeckP0, deckP1: currentDeckP1, deckTypeP0, deckTypeP1 } = getRoundDecks(currentRound > 0 ? currentRound : 1);
 
-    const currentP0Sets = isDeckSwapped ? 'Set 11-20' : 'Set 1-10';
-    const currentP1Sets = isDeckSwapped ? 'Set 1-10' : 'Set 11-20';
+    const currentP0Sets = isDeckSwapped ? 'Set 17-32' : 'Set 1-16'; // Diperbarui
+    const currentP1Sets = isDeckSwapped ? 'Set 1-16' : 'Set 17-32'; // Diperbarui
 
 
     return (
